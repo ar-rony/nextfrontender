@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { dataStore } from "@/app/lib/datastore";
+
+export const dynamic = "force-dynamic";
 
 type Project = {
   id: string;
@@ -14,8 +15,9 @@ type Project = {
   link?: string;
 };
 
-export default function ProjectsPage() {
-  const projects = dataStore.getProjects();
+export default async function ProjectsPage() {
+  const res = await fetch("/api/admin/projects", { cache: "no-store" });
+  const projects: Project[] = await res.json();
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 py-20 px-6 sm:px-8 lg:px-10">

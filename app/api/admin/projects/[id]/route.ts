@@ -1,5 +1,4 @@
 import { dataStore } from "@/app/lib/datastore";
-import { projects as staticProjects } from "@/app/lib/constants";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -25,14 +24,9 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const { id } = await params;
     const data = await request.json();
 
-    const updatedProject = dataStore.updateProject(id, data);
+    const updatedProject = await dataStore.updateProject(id, data);
     if (!updatedProject) {
       return Response.json({ message: "Project not found" }, { status: 404 });
-    }
-    // Keep the static projects list in sync
-    const idx = staticProjects.findIndex((p) => p.id === id);
-    if (idx !== -1) {
-      staticProjects[idx] = { ...staticProjects[idx], ...updatedProject } as any;
     }
 
     return Response.json(updatedProject);
@@ -44,14 +38,11 @@ export async function PUT(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const deletedProject = dataStore.deleteProject(id);
+    const deletedProject = await dataStore.deleteProject(id);
 
     if (!deletedProject) {
       return Response.json({ message: "Project not found" }, { status: 404 });
     }
-    // Remove from static projects list as well
-    const idx = staticProjects.findIndex((p) => p.id === id);
-    if (idx !== -1) staticProjects.splice(idx, 1);
 
     return Response.json(deletedProject);
   } catch (error) {
