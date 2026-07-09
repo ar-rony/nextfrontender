@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getServerApiUrl } from "@/app/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ type Project = {
 };
 
 export default async function ProjectsPage() {
-  const res = await fetch("/api/admin/projects", { cache: "no-store" });
+  const res = await fetch(getServerApiUrl("/api/admin/projects"), { cache: "no-store" });
   const projects: Project[] = await res.json();
 
   return (

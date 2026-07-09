@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Project } from "@/app/lib/constants";
+import { getServerApiUrl } from "@/app/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function ProjectsSection() {
-  const res = await fetch("/api/admin/projects", { cache: "no-store" });
+  const res = await fetch(getServerApiUrl("/api/admin/projects"), { cache: "no-store" });
   const projects: Project[] = await res.json();
 
   return (
