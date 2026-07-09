@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
-import { projects } from "@/app/lib/constants";
+import { dataStore } from "@/app/lib/datastore";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -9,6 +8,7 @@ type Props = {
 
 export default async function ProjectDetailPage({ params }: Props) {
   const { slug } = await params;
+  const projects = dataStore.getProjects();
   const project = projects.find((entry) => entry.slug === slug);
 
   if (!project) {
@@ -47,6 +47,15 @@ export default async function ProjectDetailPage({ params }: Props) {
           </ul>
         </div>
       </div>
+
+      {/* Images / gallery */}
+      {project.images && project.images.length > 0 && (
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {project.images.map((img, idx) => (
+            <img key={idx} src={img} alt={`${project.title}-${idx}`} className="rounded-lg w-full" />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

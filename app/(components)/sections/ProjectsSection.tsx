@@ -1,8 +1,9 @@
 import Link from "next/link";
-
-import { projects } from "@/app/lib/constants";
+import { dataStore } from "@/app/lib/datastore";
 
 export function ProjectsSection() {
+  const projects = dataStore.getProjects();
+
   return (
     <section id="projects" className="border-y border-border bg-muted/30">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-20 sm:px-8 lg:px-10">
@@ -23,6 +24,9 @@ export function ProjectsSection() {
         <div className="grid gap-6 md:grid-cols-2">
           {projects.slice(0, 2).map((project) => (
             <article key={project.slug} className="rounded-3xl border border-border bg-background p-6 shadow-sm">
+              {project.preview && (
+                <img src={project.preview} alt={project.title} className="w-full rounded-2xl mb-4" />
+              )}
               <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
                 {project.category}
               </p>
