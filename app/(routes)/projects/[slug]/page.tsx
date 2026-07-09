@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Project } from "@/app/lib/constants";
-import { getServerApiUrl } from "@/app/lib/api";
+import { dataStore } from "@/app/lib/datastore";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -11,8 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectDetailPage({ params }: Props) {
   const { slug } = await params;
-  const res = await fetch(getServerApiUrl("/api/admin/projects"), { cache: "no-store" });
-  const projects: Project[] = await res.json();
+  const projects: Project[] = dataStore.getProjects();
   const project = projects.find((entry) => entry.slug === slug);
 
   if (!project) {

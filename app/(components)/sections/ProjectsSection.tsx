@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Project } from "@/app/lib/constants";
-import { getServerApiUrl } from "@/app/lib/api";
+import { dataStore } from "@/app/lib/datastore";
 
 export const dynamic = "force-dynamic";
 
 export async function ProjectsSection() {
-  const res = await fetch(getServerApiUrl("/api/admin/projects"), { cache: "no-store" });
-  const projects: Project[] = await res.json();
+  const projects: Project[] = dataStore.getProjects();
 
   return (
     <section id="projects" className="border-y border-border bg-muted/30">
