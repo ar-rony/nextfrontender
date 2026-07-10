@@ -1,7 +1,9 @@
+import { existsSync, readFileSync } from "fs";
+import path from "path";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Project } from "@/app/lib/constants";
-import { dataStore } from "@/app/lib/datastore";
+import type { Project } from "@/app/lib/constants";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -9,9 +11,32 @@ type Props = {
 
 export const dynamic = "force-dynamic";
 
+const projectsFile = path.join(process.cwd(), "data", "projects.json");
+
+function getProjects(): Project[] {
+  if (!existsSync(projectsFile)) return [];
+  const raw = readFileSync(projectsFile, "utf-8");
+  return JSON.parse(raw) as Project[];
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const projects = getProjects();
+  const project = projects.find((entry) => entry.slug === slug);
+
+  if (!project) {
+    return { title: "Project Not Found" };
+  }
+
+  return {
+    title: `${project.title} | Nextfrontender`,
+    description: project.summary || project.description,
+  };
+}
+
 export default async function ProjectDetailPage({ params }: Props) {
   const { slug } = await params;
-  const projects: Project[] = dataStore.getProjects();
+  const projects = getProjects();
   const project = projects.find((entry) => entry.slug === slug);
 
   if (!project) {
