@@ -336,7 +336,10 @@ export default function ProjectsManagementPage() {
           {!showForm && (
             <Button
               type="button"
-              onClick={() => setShowForm(true)}
+              onClick={(event) => {
+                event.preventDefault();
+                setShowForm(true);
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               Add New Project
@@ -554,7 +557,10 @@ export default function ProjectsManagementPage() {
                     {/* Edit Button - opens form with project data */}
                     <Button
                       type="button"
-                      onClick={() => handleEdit(project)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleEdit(project);
+                      }}
                       disabled={deletingId === project.id}
                       className="bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -564,7 +570,10 @@ export default function ProjectsManagementPage() {
                     {/* Delete Button - shows confirmation before deleting */}
                     <Button
                       type="button"
-                      onClick={() => handleDelete(project.id)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleDelete(project.id);
+                      }}
                       disabled={deletingId === project.id || loading}
                       className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >

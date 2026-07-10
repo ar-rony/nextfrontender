@@ -12,6 +12,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+type Primitive = string | number | boolean | undefined | null;
+
+type DatabaseClient = {
+  sql: (strings: TemplateStringsArray, ...values: Primitive[]) => Promise<unknown>;
+};
+
 // ============================================================================
 // DATABASE CLIENT SETUP
 // ============================================================================
@@ -21,16 +27,31 @@ import path from "path";
  * Falls back to pooled connection for Vercel Postgres
  * @returns {DatabaseClient | undefined} Client instance or undefined if no connection
  */
-function getDbClient() {
+function getDbClient(): DatabaseClient | undefined {
   // Try non-pooling connection first (for direct queries)
   const directConnection = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
-  
+
   // Fall back to pooled connection (for Vercel Postgres)
   const pooledConnection = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
   // Use direct connection if available and not pooler
   if (directConnection && !directConnection.includes("-pooler.")) {
-    return createClient({ connectionString: directConnection });
+    try {
+      const client = createClient({ connectionString: directConnection });
+      return {
+        sql: async (strings: TemplateStringsArray, ...values: Primitive[]) => {
+          await client.connect();
+          try {
+            return await client.sql(strings, ...values);
+          } finally {
+            await client.end();
+          }
+        },
+      };
+    } catch (error) {
+      console.error("Failed to initialize direct Postgres client", error);
+      return undefined;
+    }
   }
 
   // Use pooled connection if available and is pooler
@@ -40,7 +61,21 @@ function getDbClient() {
 
   // Fall back to direct connection as last resort
   if (directConnection) {
-    return createClient({ connectionString: directConnection });
+    try {
+      const client = createClient({ connectionString: directConnection });
+      return {
+        sql: async (strings: TemplateStringsArray, ...values: Primitive[]) => {
+          await client.connect();
+          try {
+            return await client.sql(strings, ...values);
+          } finally {
+            await client.end();
+          }
+        },
+      };
+    } catch (error) {
+      console.error("Failed to initialize fallback direct Postgres client", error);
+    }
   }
 
   return undefined;
@@ -264,8 +299,8 @@ class DataStore {
 
     try {
       // Fetch all projects ordered by creation date (newest first)
-      const result = await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`;
-      const rows = (result.rows as ProjectRow[]) ?? [];
+      const result = (await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`) as { rows?: ProjectRow[] };
+      const rows = result.rows ?? [];
       const projects = rows.map(toProject);
 
       // If database is empty, try to seed it with file data
@@ -282,8 +317,8 @@ class DataStore {
           }
 
           // Reload projects after seeding
-          const seededResult = await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`;
-          const seededRows = (seededResult.rows as ProjectRow[]) ?? [];
+          const seededResult = (await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`) as { rows?: ProjectRow[] };
+          const seededRows = seededResult.rows ?? [];
           const seededProjects = seededRows.map(toProject);
           this.projects = seededProjects;
           await this.syncProjectsFile(seededProjects);
