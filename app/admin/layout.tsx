@@ -1,21 +1,28 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isAdmin = typeof window !== "undefined" && localStorage.getItem("isAdmin");
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // If not authenticated and not already on the login page, redirect to login
-    if (!isAdmin && pathname !== "/admin/login") {
+    const storedValue = window.localStorage.getItem("isAdmin");
+    const authenticated = storedValue === "true";
+
+    setIsAdmin(authenticated);
+
+    if (!authenticated && pathname !== "/admin/login") {
       router.push("/admin/login");
     }
-  }, [isAdmin, router, pathname]);
+  }, [pathname, router]);
 
-  // Allow the login page to render even when not authenticated
+  if (isAdmin === null) {
+    return null;
+  }
+
   if (!isAdmin && pathname !== "/admin/login") {
     return null;
   }
