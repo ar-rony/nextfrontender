@@ -1,18 +1,8 @@
-import { existsSync, readFileSync } from "fs";
-import path from "path";
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { Project } from "@/app/lib/constants";
+import { dataStore } from "@/app/lib/datastore";
 
 export const dynamic = "force-dynamic";
-
-const projectsFile = path.join(process.cwd(), "data", "projects.json");
-
-function getProjects(): Project[] {
-  if (!existsSync(projectsFile)) return [];
-  const raw = readFileSync(projectsFile, "utf-8");
-  return JSON.parse(raw) as Project[];
-}
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -20,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ProjectsPage() {
-  const projects = getProjects();
+  const projects = await dataStore.getProjects();
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 py-20 px-6 sm:px-8 lg:px-10">

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { dataStore } from "@/app/lib/datastore";
 
 type RouteContext = {
@@ -7,7 +8,7 @@ type RouteContext = {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const project = dataStore.getProjectById(id);
+    const project = await dataStore.getProjectById(id);
 
     if (!project) {
       return Response.json({ message: "Project not found" }, { status: 404 });
@@ -25,6 +26,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const data = await request.json();
 
     const updatedProject = await dataStore.updateProject(id, data);
+    revalidatePath("/projects");
     if (!updatedProject) {
       return Response.json({ message: "Project not found" }, { status: 404 });
     }
@@ -39,6 +41,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
     const deletedProject = await dataStore.deleteProject(id);
+    revalidatePath("/projects");
 
     if (!deletedProject) {
       return Response.json({ message: "Project not found" }, { status: 404 });

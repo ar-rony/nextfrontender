@@ -3,7 +3,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// This datastore persists projects to data/projects.json in the repo root.
+// This datastore persists projects to data/projects.json in the repo root and
+// also syncs to GitHub when credentials are available for Vercel deployments.
 class DataStore {
   private projects: Project[] = [];
   private users: User[] = [];
@@ -13,24 +14,7 @@ class DataStore {
   constructor() {
     this.filePath = path.join(process.cwd(), "data", "projects.json");
     this.runtimePath = path.join(os.tmpdir(), "nextfrontender-projects.json");
-
-    const loadPath = fs.existsSync(this.runtimePath) ? this.runtimePath : this.filePath;
-
-    try {
-      if (fs.existsSync(loadPath)) {
-        const raw = fs.readFileSync(loadPath, "utf-8");
-        const parsed = JSON.parse(raw);
-        // Convert date strings back to Date objects where present
-        this.projects = parsed.map((p: any) => ({
-          ...p,
-          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
-          updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
-        }));
-      }
-    } catch (err) {
-      console.error("Failed to load projects.json", err);
-      this.projects = [];
-    }
+    this.projects = this.loadProjectsSync();
 
     // Default users (kept in-memory)
     this.users = [
@@ -44,16 +28,109 @@ class DataStore {
     ];
   }
 
+  private loadProjectsSync(): Project[] {
+    const loadPath = fs.existsSync(this.runtimePath) ? this.runtimePath : this.filePath;
+
+    try {
+      if (fs.existsSync(loadPath)) {
+        const raw = fs.readFileSync(loadPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        return parsed.map((p: any) => ({
+          ...p,
+          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+          updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to load projects.json", err);
+    }
+
+    return [];
+  }
+
+  private async loadProjects() {
+    const candidates = [
+      process.env.PROJECTS_JSON_PATH,
+      this.filePath,
+      this.runtimePath,
+    ].filter(Boolean) as string[];
+
+    for (const filePath of candidates) {
+      if (!fs.existsSync(filePath)) continue;
+
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        this.projects = parsed.map((p: any) => ({
+          ...p,
+          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+          updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
+        }));
+        return;
+      } catch (err) {
+        console.error("Failed to load projects.json", err);
+      }
+    }
+
+    if (process.env.PROJECTS_JSON_URL) {
+      try {
+        const res = await fetch(process.env.PROJECTS_JSON_URL);
+        if (res.ok) {
+          const parsed = await res.json();
+          this.projects = parsed.map((p: any) => ({
+            ...p,
+            createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+            updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
+          }));
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to fetch remote projects.json", err);
+      }
+    }
+
+    if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPO) {
+      try {
+        const [owner, repoName] = process.env.GITHUB_REPO.split("/");
+        const res = await fetch(
+          `https://api.github.com/repos/${owner}/${repoName}/contents/data/projects.json?ref=${process.env.GITHUB_BRANCH || "main"}`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              Accept: "application/vnd.github+json",
+            },
+          }
+        );
+
+        if (res.ok) {
+          const json = await res.json();
+          const content = Buffer.from(json.content, "base64").toString("utf-8");
+          const parsed = JSON.parse(content);
+          this.projects = parsed.map((p: any) => ({
+            ...p,
+            createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+            updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch projects from GitHub", err);
+      }
+    }
+  }
+
   // Projects methods
-  getProjects(): Project[] {
+  async getProjects(): Promise<Project[]> {
+    await this.loadProjects();
     return this.projects;
   }
 
-  getProjectById(id: string): Project | undefined {
+  async getProjectById(id: string): Promise<Project | undefined> {
+    await this.loadProjects();
     return this.projects.find((p) => p.id === id);
   }
 
   async createProject(data: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<Project> {
+    await this.loadProjects();
     const project: Project = {
       id: `proj-${Date.now()}`,
       ...data,
@@ -66,6 +143,7 @@ class DataStore {
   }
 
   async updateProject(id: string, data: Partial<Project>): Promise<Project | undefined> {
+    await this.loadProjects();
     const index = this.projects.findIndex((p) => p.id === id);
     if (index === -1) return undefined;
 
@@ -79,6 +157,7 @@ class DataStore {
   }
 
   async deleteProject(id: string): Promise<Project | undefined> {
+    await this.loadProjects();
     const index = this.projects.findIndex((p) => p.id === id);
     if (index === -1) return undefined;
 
@@ -93,12 +172,9 @@ class DataStore {
       if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
       fs.writeFileSync(this.runtimePath, JSON.stringify(this.projects, null, 2), "utf-8");
 
-      // In local development, also persist to the repo file for visible JSON changes.
-      if (!process.env.VERCEL) {
-        const dir = path.dirname(this.filePath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(this.filePath, JSON.stringify(this.projects, null, 2), "utf-8");
-      }
+      const dir = path.dirname(this.filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.filePath, JSON.stringify(this.projects, null, 2), "utf-8");
 
       await this.commitToGitHub();
     } catch (err) {
@@ -198,7 +274,8 @@ class DataStore {
   }
 
   // Statistics
-  getStats() {
+  async getStats() {
+    await this.loadProjects();
     const recentSubmissions = this.users.filter((u) => {
       if (!u.submittedAt) return false;
       const thirtyDaysAgo = new Date();

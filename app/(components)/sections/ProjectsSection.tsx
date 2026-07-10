@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { Project } from "@/app/lib/constants";
 import { dataStore } from "@/app/lib/datastore";
 
 export const dynamic = "force-dynamic";
 
 export async function ProjectsSection() {
-  const projects: Project[] = dataStore.getProjects();
+  const projects = await dataStore.getProjects();
 
   return (
     <section id="projects" className="border-y border-border bg-muted/30">
