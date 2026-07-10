@@ -1,3 +1,12 @@
+// ============================================================================
+// ADMIN DASHBOARD PAGE
+// ============================================================================
+// Main admin dashboard displaying:
+// - Welcome message with admin username
+// - Key statistics (projects, users, submissions)
+// - Quick action links to manage content
+// ============================================================================
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,41 +16,95 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
+/**
+ * Dashboard statistics interface
+ */
 interface Stats {
   totalProjects: number;
   totalUsers: number;
   recentSubmissions: number;
 }
 
+/**
+ * Admin Dashboard Component
+ * Displays overview statistics and quick action buttons for admin management
+ */
 export default function AdminDashboard() {
+  // ========================================================================
+  // STATE MANAGEMENT
+  // ========================================================================
+
+  // Dashboard statistics
   const [stats, setStats] = useState<Stats>({
     totalProjects: 0,
     totalUsers: 0,
     recentSubmissions: 0,
   });
+  
+  // Logged-in admin username
   const [adminUsername, setAdminUsername] = useState("");
+  
+  // Router for navigation
   const router = useRouter();
 
+  // ========================================================================
+  // INITIALIZATION
+  // ========================================================================
+
+  /**
+   * Initialize dashboard on component mount
+   * - Load admin username from localStorage
+   * - Fetch dashboard statistics
+   */
   useEffect(() => {
+    // Get admin username from browser storage
     const username = localStorage.getItem("adminUsername");
     if (username) {
       setAdminUsername(username);
     }
+    
+    // Fetch dashboard statistics
     fetchStats();
   }, []);
 
+  // ========================================================================
+  // DATA FETCHING
+  // ========================================================================
+
+  /**
+   * Fetches dashboard statistics from API endpoints
+   * Retrieves stats and projects count to populate dashboard cards
+   */
   const fetchStats = async () => {
     try {
+      // Fetch stats from stats endpoint
       const response = await fetch("/api/admin/stats");
       if (response.ok) {
         const data = await response.json();
         setStats(data);
+      }
+
+      // Fetch projects to get accurate count
+      const projectsResponse = await fetch("/api/admin/projects");
+      if (projectsResponse.ok) {
+        const projects = await projectsResponse.json();
+        setStats((prev) => ({ ...prev, totalProjects: projects.length }));
       }
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
   };
 
+  // ========================================================================
+  // USER ACTIONS
+  // ========================================================================
+
+  /**
+   * Handles admin logout
+   * - Clears authentication from localStorage
+   * - Shows success toast
+   * - Redirects to login page
+   */
   const handleLogout = () => {
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("adminUsername");
@@ -52,15 +115,26 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* ==================================================================== */}
+        {/* HEADER SECTION */}
+        {/* ==================================================================== */}
         <div className="flex justify-between items-center mb-12">
           <div>
+            {/* Main title */}
             <h1 className="text-4xl font-bold text-white mb-2">Admin Dashboard</h1>
-            <p className="text-slate-400">Welcome, <span className="font-semibold text-slate-300">{adminUsername}</span></p>
+            
+            {/* Welcome message with logged-in admin name */}
+            <p className="text-slate-400">
+              Welcome, <span className="font-semibold text-slate-300">{adminUsername}</span>
+            </p>
           </div>
+          
+          {/* Top-right action links */}
           <Link href="/" className="text-blue-400 hover:text-blue-300">
             Visit Site
           </Link>
+          
+          {/* Logout button */}
           <Button
             onClick={handleLogout}
             variant="outline"
@@ -70,8 +144,11 @@ export default function AdminDashboard() {
           </Button>
         </div>
 
-        {/* Stats Grid */}
+        {/* ==================================================================== */}
+        {/* STATISTICS GRID */}
+        {/* ==================================================================== */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {/* Total Projects Stat Card */}
           <Card className="bg-slate-800 border-slate-700 p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -82,6 +159,7 @@ export default function AdminDashboard() {
             </div>
           </Card>
 
+          {/* Total Users Stat Card */}
           <Card className="bg-slate-800 border-slate-700 p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -92,6 +170,7 @@ export default function AdminDashboard() {
             </div>
           </Card>
 
+          {/* Recent Submissions Stat Card */}
           <Card className="bg-slate-800 border-slate-700 p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -103,20 +182,29 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Quick Actions */}
+        {/* ==================================================================== */}
+        {/* QUICK ACTIONS SECTION */}
+        {/* ==================================================================== */}
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">
           <h2 className="text-2xl font-bold text-white mb-6">Quick Actions</h2>
+          
+          {/* Action buttons grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Manage Projects Button */}
             <Link href="/admin/projects">
               <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base">
                 Manage Projects
               </Button>
             </Link>
+            
+            {/* Manage Users Button */}
             <Link href="/admin/users">
               <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base">
                 Manage Users
               </Button>
             </Link>
+            
+            {/* Settings Button */}
             <Link href="/admin/settings">
               <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white h-12 text-base">
                 Settings
