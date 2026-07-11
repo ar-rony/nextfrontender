@@ -64,17 +64,26 @@ export default function AdminDashboard() {
   useEffect(() => {
     const username = window.localStorage.getItem("adminUsername");
     const role = window.localStorage.getItem("adminRole");
+
     if (username) {
       setAdminUsername(username);
     }
     if (role) {
       setAdminRole(role);
     }
-    if (role !== "Superadmin") {
+
+    if (!role) {
+      router.push("/admin/login");
+      return;
+    }
+
+    // Allow Superadmin and Admin roles to access dashboard
+    // Redirect only Viewer role to projects page
+    if (role === "Viewer") {
       router.push("/admin/projects");
       return;
     }
- 
+
     fetchStats();
   }, [router]);
 

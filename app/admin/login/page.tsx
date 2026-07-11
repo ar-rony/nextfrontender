@@ -72,8 +72,8 @@ export default function AdminLoginPage() {
         // Show success message
         toast.success("Login successful!");
         
-        // Redirect based on role
-        const destination = data.admin.role === "Superadmin" ? "/admin" : "/admin/projects";
+        // Redirect based on role - Admin and Superadmin go to dashboard
+        const destination = (data.admin.role === "Superadmin" || data.admin.role === "Admin") ? "/admin" : "/admin/projects";
         router.push(destination);
       } else {
         // Show error message from API or generic message

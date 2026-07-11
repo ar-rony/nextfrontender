@@ -45,7 +45,7 @@ export interface Admin {
 export const ADMIN_CREDENTIALS: Admin[] = [
   {
     id: "superadmin-001",
-    username: "superadmin",
+    username: "admin",
     password: "superadmin123",
     email: "superadmin@nextfrontender.com",
     role: "Superadmin",
