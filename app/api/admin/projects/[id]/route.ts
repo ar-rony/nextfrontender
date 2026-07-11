@@ -1,11 +1,20 @@
 import { revalidatePath } from "next/cache";
+import { unstable_noStore as noStore } from "next/cache";
 import { dataStore } from "@/app/lib/datastore";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+/**
+ * GET /api/admin/projects/[id]
+ * Retrieves a single project by ID
+ * NOTE: noStore() disables caching so frontend always gets latest data
+ */
 export async function GET(request: Request, { params }: RouteContext) {
+  // CRITICAL: Disable caching - without this, stale project data appears on frontend
+  noStore();
+  
   try {
     const { id } = await params;
     const project = await dataStore.getProjectById(id);
@@ -21,6 +30,9 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function PUT(request: Request, { params }: RouteContext) {
+  // CRITICAL: Disable caching - ensure updated data appears immediately on frontend
+  noStore();
+  
   try {
     const { id } = await params;
     const data = await request.json();
@@ -38,6 +50,9 @@ export async function PUT(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
+  // CRITICAL: Disable caching - ensure deletions are immediately reflected
+  noStore();
+  
   try {
     const adminRole = request.headers.get("x-admin-role");
     if (adminRole !== "Superadmin") {

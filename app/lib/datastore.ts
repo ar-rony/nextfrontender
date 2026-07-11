@@ -594,6 +594,18 @@ class DataStore {
   }
 
   /**
+   * Invalidates the projects cache
+   * Call this after creating, updating, or deleting projects
+   * Forces next getProjects() call to reload from database/file
+   * CRITICAL: Ensures frontend always sees latest data
+   * @private
+   */
+  private invalidateProjectsCache(): void {
+    this.projectsLoaded = false;
+    console.log("[DataStore] Projects cache invalidated - will reload on next request");
+  }
+
+  /**
    * Creates a new project
    * Persists to both file system and database
    * @param {Omit<Project, 'id' | 'createdAt' | 'updatedAt'>} data - Project data (without auto-generated fields)
@@ -630,12 +642,16 @@ class DataStore {
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
+      // Invalidate cache for next requests - CRITICAL for frontend updates
+      this.invalidateProjectsCache();
       return project;
     }
 
     // Fall back to file-based storage
     this.projects = [...this.projects, project];
     await this.syncProjectsFile(this.projects);
+    // Invalidate cache for next requests
+    this.invalidateProjectsCache();
     return project;
   }
 
@@ -682,12 +698,16 @@ class DataStore {
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
+      // Invalidate cache for next requests - CRITICAL for frontend updates
+      this.invalidateProjectsCache();
       return updatedProject;
     }
 
     // Fall back to file-based storage
     this.projects[index] = updatedProject;
     await this.syncProjectsFile(this.projects);
+    // Invalidate cache for next requests
+    this.invalidateProjectsCache();
     return this.projects[index];
   }
 
@@ -714,11 +734,15 @@ class DataStore {
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
+      // Invalidate cache for next requests - CRITICAL for frontend updates
+      this.invalidateProjectsCache();
       return deleted;
     }
 
     // Fall back to file-based storage
     await this.syncProjectsFile(this.projects);
+    // Invalidate cache for next requests
+    this.invalidateProjectsCache();
     return deleted;
   }
 

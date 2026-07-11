@@ -7,14 +7,20 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
+import { unstable_noStore as noStore } from "next/cache";
 import { dataStore } from "@/app/lib/datastore";
 
 /**
  * GET /api/admin/projects
  * Retrieves all projects from the data store
+ * NOTE: noStore() disables caching so updates appear immediately on frontend
  * @returns {Response} JSON array of all projects
  */
 export async function GET() {
+  // CRITICAL: Disable caching for this endpoint
+  // Without this, frontend won't see updated projects after edit/create/delete
+  noStore();
+  
   try {
     // Fetch all projects from data store
     const projects = await dataStore.getProjects();
@@ -40,6 +46,9 @@ export async function GET() {
  * @returns {Response} Created project with status 201
  */
 export async function POST(request: Request) {
+  // CRITICAL: Disable caching so new projects appear immediately
+  noStore();
+  
   try {
     // Parse request body
     const data = await request.json();
