@@ -1,5 +1,7 @@
+import fs from "fs";
+import path from "path";
 import type { Metadata } from "next";
-import { dataStore } from "@/app/lib/datastore";
+import type { Project } from "@/app/lib/constants";
 import ProjectsGalleryClient from "./ProjectsGalleryClient";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +11,9 @@ export const metadata: Metadata = {
   description: "Selected work and recent projects.",
 };
 
-export default async function ProjectsPage() {
-  const projects = await dataStore.getProjects();
+export default function ProjectsPage() {
+  const filePath = path.join(process.cwd(), "data", "projects.json");
+  const projects = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Project[];
 
   return <ProjectsGalleryClient projects={projects} />;
 }
