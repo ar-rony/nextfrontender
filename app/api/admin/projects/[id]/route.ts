@@ -39,6 +39,14 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
+    const adminRole = request.headers.get("x-admin-role");
+    if (adminRole !== "Superadmin") {
+      return Response.json(
+        { message: "Only Superadmin may delete projects." },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const deletedProject = await dataStore.deleteProject(id);
     revalidatePath("/projects");

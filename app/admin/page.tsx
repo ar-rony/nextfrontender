@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ interface Stats {
   totalProjects: number;
   totalUsers: number;
   recentSubmissions: number;
+  newMessages: number;
 }
 
 /**
@@ -39,10 +41,12 @@ export default function AdminDashboard() {
     totalProjects: 0,
     totalUsers: 0,
     recentSubmissions: 0,
+    newMessages: 0,
   });
   
-  // Logged-in admin username
+  // Logged-in admin username and role
   const [adminUsername, setAdminUsername] = useState("");
+  const [adminRole, setAdminRole] = useState("");
   
   // Router for navigation
   const router = useRouter();
@@ -56,16 +60,23 @@ export default function AdminDashboard() {
    * - Load admin username from localStorage
    * - Fetch dashboard statistics
    */
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    // Get admin username from browser storage
-    const username = localStorage.getItem("adminUsername");
+    const username = window.localStorage.getItem("adminUsername");
+    const role = window.localStorage.getItem("adminRole");
     if (username) {
       setAdminUsername(username);
     }
-    
-    // Fetch dashboard statistics
+    if (role) {
+      setAdminRole(role);
+    }
+    if (role !== "Superadmin") {
+      router.push("/admin/projects");
+      return;
+    }
+ 
     fetchStats();
-  }, []);
+  }, [router]);
 
   // ========================================================================
   // DATA FETCHING
@@ -75,7 +86,7 @@ export default function AdminDashboard() {
    * Fetches dashboard statistics from API endpoints
    * Retrieves stats and projects count to populate dashboard cards
    */
-  const fetchStats = async () => {
+  async function fetchStats() {
     try {
       // Fetch stats from stats endpoint
       const response = await fetch("/api/admin/stats");
@@ -93,7 +104,7 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
-  };
+  }
 
   // ========================================================================
   // USER ACTIONS
@@ -108,6 +119,7 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("adminUsername");
+    localStorage.removeItem("adminRole");
     toast.success("Logged out successfully");
     router.push("/admin/login");
   };
@@ -126,28 +138,42 @@ export default function AdminDashboard() {
             {/* Welcome message with logged-in admin name */}
             <p className="text-slate-400">
               Welcome, <span className="font-semibold text-slate-300">{adminUsername}</span>
+              {adminRole ? (
+                <span className="ml-2 text-slate-500">({adminRole})</span>
+              ) : null}
             </p>
+            
           </div>
           
-          {/* Top-right action links */}
-          <Link href="/" className="text-blue-400 hover:text-blue-300">
-            Visit Site
-          </Link>
           
-          {/* Logout button */}
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="bg-red-600 hover:bg-red-700 text-white border-red-500"
-          >
-            Logout
-          </Button>
+          {/* Top-right action links */}
+          <div className="flex items-center gap-3">
+            <Link href="/projects" className="text-blue-400 hover:text-blue-300 border-slate-600 hover:border-primary">
+              See Projects
+            </Link>
+            <Button
+              variant="outline"
+              title={stats.newMessages > 0 ? `${stats.newMessages} new client message${stats.newMessages === 1 ? "" : "s"}` : "No new client messages"}
+              className="text-gray-800 dark:text-white border-slate-600 hover:border-primary"
+            >
+              <Bell className="mr-2 h-4 w-4" />
+              {stats.newMessages} new
+            </Button>
+            
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="bg-red-600 hover:bg-red-700 text-white border-red-500"
+            >
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* ==================================================================== */}
         {/* STATISTICS GRID */}
         {/* ==================================================================== */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
           {/* Total Projects Stat Card */}
           <Card className="bg-slate-800 border-slate-700 p-6">
             <div className="flex items-center justify-between">
@@ -167,6 +193,17 @@ export default function AdminDashboard() {
                 <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
               </div>
               <div className="text-5xl opacity-10">👥</div>
+            </div>
+          </Card>
+
+          {/* New Messages Stat Card */}
+          <Card className="bg-slate-800 border-slate-700 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm font-medium">New Messages</p>
+                <p className="text-4xl font-bold text-gray-500 dark:text-white mt-2">{stats.newMessages}</p>
+              </div>
+              <div className="text-5xl opacity-10">📬</div>
             </div>
           </Card>
 
@@ -197,10 +234,10 @@ export default function AdminDashboard() {
               </Button>
             </Link>
             
-            {/* Manage Users Button */}
-            <Link href="/admin/users">
+            {/* Messages Button */}
+            <Link href="/admin/messages">
               <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base">
-                Manage Users
+                Messages
               </Button>
             </Link>
             

@@ -44,6 +44,7 @@ export default function ProjectsManagementPage() {
   
   // State for individual delete operations (tracks which project is being deleted)
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
   
   // Form data state with all project fields
   const [formData, setFormData] = useState({
@@ -68,6 +69,7 @@ export default function ProjectsManagementPage() {
    */
   useEffect(() => {
     fetchProjects();
+    setAdminRole(localStorage.getItem("adminRole"));
   }, []);
 
   // ========================================================================
@@ -271,11 +273,16 @@ export default function ProjectsManagementPage() {
     try {
       const response = await fetch(`/api/admin/projects/${id}`, {
         method: "DELETE",
+        headers: {
+          "x-admin-role": adminRole || "",
+        },
       });
-
+ 
       if (response.ok) {
         toast.success("Project deleted!");
         fetchProjects();
+      } else if (response.status === 403) {
+        toast.error("Only Superadmin can delete projects.");
       } else {
         toast.error("Failed to delete project");
       }
@@ -295,7 +302,7 @@ export default function ProjectsManagementPage() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    
+     
     // Reset form to initial state
     setFormData({
       title: "",
@@ -310,7 +317,9 @@ export default function ProjectsManagementPage() {
       link: "",
     });
   };
-
+ 
+  const canDelete = adminRole === "Superadmin";
+ 
   // ========================================================================
   // RENDER
   // ========================================================================
@@ -568,17 +577,28 @@ export default function ProjectsManagementPage() {
                     </Button>
                     
                     {/* Delete Button - shows confirmation before deleting */}
-                    <Button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        handleDelete(project.id);
-                      }}
-                      disabled={deletingId === project.id || loading}
-                      className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deletingId === project.id ? "Deleting..." : "Delete"}
-                    </Button>
+                    {canDelete ? (
+                      <Button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleDelete(project.id);
+                        }}
+                        disabled={deletingId === project.id || loading}
+                        className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === project.id ? "Deleting..." : "Delete"}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        disabled
+                        title="Only Superadmin can delete projects"
+                        className="bg-slate-600 text-slate-300 cursor-not-allowed"
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>

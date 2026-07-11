@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,20 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAdminRole(localStorage.getItem("adminRole"));
+  }, []);
+
+  const permissionsDescription =
+    adminRole === "Superadmin"
+      ? "Superadmin can access the dashboard, manage all projects, delete projects, and handle messages."
+      : adminRole === "Admin"
+      ? "Admin can add and edit projects and manage messages, but cannot delete projects."
+      : adminRole === "Viewer"
+      ? "Viewer can view and update projects and messages, but cannot delete projects."
+      : "Your role determines which admin actions are available.";
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +147,10 @@ export default function SettingsPage() {
             <p>
               <span className="text-slate-400">Username:</span> {localStorage.getItem("adminUsername")}
             </p>
+            <p>
+              <span className="text-slate-400">Role:</span> {adminRole || "Unknown"}
+            </p>
+            <p className="text-sm text-slate-400 mt-4">{permissionsDescription}</p>
             <p className="text-sm text-slate-400 mt-4">
               Keep your login credentials safe and change your password regularly.
             </p>

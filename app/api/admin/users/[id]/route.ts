@@ -24,7 +24,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const { id } = await params;
     const data = await request.json();
 
-    const updatedUser = dataStore.updateUser(id, data);
+    const updatedUser = await dataStore.updateUser(id, data);
     if (!updatedUser) {
       return Response.json({ message: "User not found" }, { status: 404 });
     }
@@ -38,7 +38,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const deletedUser = dataStore.deleteUser(id);
+    const deletedUser = await dataStore.deleteUser(id);
 
     if (!deletedUser) {
       return Response.json({ message: "User not found" }, { status: 404 });

@@ -16,13 +16,16 @@ export function Header() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUsername, setAdminUsername] = useState<string | null>(null);
-
+  const [adminRole, setAdminRole] = useState<string | null>(null);
+ 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const v = localStorage.getItem("isAdmin");
       const name = localStorage.getItem("adminUsername");
+      const role = localStorage.getItem("adminRole");
       setIsAdmin(!!v);
       setAdminUsername(name);
+      setAdminRole(role);
     }
   }, []);
 
@@ -53,7 +56,7 @@ export function Header() {
           <ThemeToggle />
           {isAdmin ? (
             <Link
-              href="/admin"
+              href={adminRole === "Superadmin" ? "/admin" : "/admin/projects"}
               className="hidden md:inline-flex items-center justify-center rounded-full bg-slate-800 p-2 text-slate-200 transition hover:bg-slate-700"
               aria-label="Admin dashboard"
             >

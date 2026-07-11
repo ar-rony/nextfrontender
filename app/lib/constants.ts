@@ -20,9 +20,16 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  mobile?: string;
+  requirements?: string;
   message?: string;
+  reply?: string;
+  repliedAt?: Date;
   submittedAt?: Date;
 }
+
+// Admin role definitions
+export type AdminRole = "Superadmin" | "Admin" | "Viewer";
 
 // Admin type definition
 export interface Admin {
@@ -30,16 +37,34 @@ export interface Admin {
   username: string;
   password: string; // In production, use hashed passwords
   email: string;
+  role: AdminRole;
   createdAt: Date;
 }
 
 // Admin credentials (Use strong passwords in production)
-export const ADMIN_CREDENTIALS = [
+export const ADMIN_CREDENTIALS: Admin[] = [
+  {
+    id: "superadmin-001",
+    username: "superadmin",
+    password: "superadmin123",
+    email: "superadmin@nextfrontender.com",
+    role: "Superadmin",
+    createdAt: new Date("2024-01-01"),
+  },
   {
     id: "admin-001",
     username: "admin",
-    password: "admin123", // Change this to a secure password
+    password: "admin123",
     email: "admin@nextfrontender.com",
+    role: "Admin",
+    createdAt: new Date("2024-01-01"),
+  },
+  {
+    id: "viewer-001",
+    username: "viewer",
+    password: "viewer123",
+    email: "viewer@nextfrontender.com",
+    role: "Viewer",
     createdAt: new Date("2024-01-01"),
   },
 ];

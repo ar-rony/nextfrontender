@@ -171,12 +171,14 @@ class DataStore {
   // Cache for projects to reduce database queries
   private projects: Project[] = [];
   
-  // In-memory user list (not persisted to database in current implementation)
+  // User list persisted to file system for contact submissions and client management
   private users: User[] = [];
   
   // File paths for persistence
-  private filePath: string; // Persistent storage location
-  private runtimePath: string; // Runtime temporary storage
+  private filePath: string; // Persistent storage location for projects
+  private runtimePath: string; // Runtime temporary storage for projects
+  private usersFilePath: string; // Persistent storage location for users
+  private usersRuntimePath: string; // Runtime temporary storage for users
   
   // Flags for optimization
   private projectsLoaded = false; // Prevents redundant loading
@@ -186,20 +188,14 @@ class DataStore {
     // Initialize file paths
     this.filePath = path.join(process.cwd(), "data", "projects.json");
     this.runtimePath = path.join(os.tmpdir(), "nextfrontender-projects.json");
+    this.usersFilePath = path.join(process.cwd(), "data", "users.json");
+    this.usersRuntimePath = path.join(os.tmpdir(), "nextfrontender-users.json");
     
     // Load projects synchronously on initialization (file-based fallback)
     this.projects = this.loadProjectsSync();
 
-    // Initialize default users
-    this.users = [
-      {
-        id: "user-001",
-        name: "John Doe",
-        email: "john@example.com",
-        message: "Great work on the portfolio!",
-        submittedAt: new Date("2024-01-10"),
-      },
-    ];
+    // Load users from persisted storage or seed default values
+    this.users = this.loadUsersSync();
   }
 
   // ========================================================================
@@ -218,20 +214,97 @@ class DataStore {
     try {
       if (fs.existsSync(loadPath)) {
         const raw = fs.readFileSync(loadPath, "utf-8");
-        const parsed = JSON.parse(raw);
-        
+        const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
+          
         // Convert date strings to Date objects
-        return parsed.map((p: any) => ({
-          ...p,
-          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
-          updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
-        }));
+        return parsed.map((p) => {
+          const createdAt = p.createdAt instanceof Date
+            ? p.createdAt
+            : typeof p.createdAt === "string" || typeof p.createdAt === "number"
+              ? new Date(p.createdAt)
+              : undefined;
+          const updatedAt = p.updatedAt instanceof Date
+            ? p.updatedAt
+            : typeof p.updatedAt === "string" || typeof p.updatedAt === "number"
+              ? new Date(p.updatedAt)
+              : undefined;
+
+          return {
+            ...(p as unknown as Project),
+            createdAt,
+            updatedAt,
+          } as Project;
+        });
       }
     } catch (err) {
       console.error("Failed to load projects.json", err);
     }
 
     return [];
+  }
+
+  /**
+   * Synchronously loads users from file system (blocking, used during initialization)
+   * Attempts runtime path first, then fallback to persistent path
+   * @returns {User[]} Array of users or seeded default values
+   */
+  private loadUsersSync(): User[] {
+    const loadPath = fs.existsSync(this.usersRuntimePath) ? this.usersRuntimePath : this.usersFilePath;
+
+    try {
+      if (fs.existsSync(loadPath)) {
+        const raw = fs.readFileSync(loadPath, "utf-8");
+        const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
+
+        return parsed.map((u) => {
+          const submittedAt = u.submittedAt instanceof Date
+            ? u.submittedAt
+            : typeof u.submittedAt === "string" || typeof u.submittedAt === "number"
+              ? new Date(u.submittedAt)
+              : undefined;
+          const repliedAt = u.repliedAt instanceof Date
+            ? u.repliedAt
+            : typeof u.repliedAt === "string" || typeof u.repliedAt === "number"
+              ? new Date(u.repliedAt)
+              : undefined;
+
+          return {
+            ...(u as unknown as User),
+            submittedAt,
+            repliedAt,
+          } as User;
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load users.json", err);
+    }
+
+    return [
+      {
+        id: "user-001",
+        name: "John Doe",
+        email: "john@example.com",
+        message: "Great work on the portfolio!",
+        submittedAt: new Date("2024-01-10"),
+      },
+    ];
+  }
+
+  /**
+   * Persists the current user list to runtime and persistent storage
+   */
+  private async syncUsersFile() {
+    try {
+      const runtimeDir = path.dirname(this.usersRuntimePath);
+      if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
+      fs.writeFileSync(this.usersRuntimePath, JSON.stringify(this.users, null, 2), "utf-8");
+
+      const dir = path.dirname(this.usersFilePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.usersFilePath, JSON.stringify(this.users, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Failed to sync users.json", err);
+    }
   }
 
   /**
@@ -349,14 +422,27 @@ class DataStore {
 
       try {
         const raw = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
         
         // Convert date strings
-        this.projects = parsed.map((p: any) => ({
-          ...p,
-          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
-          updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
-        }));
+        this.projects = parsed.map((p) => {
+          const createdAt = p.createdAt instanceof Date
+            ? p.createdAt
+            : typeof p.createdAt === "string" || typeof p.createdAt === "number"
+              ? new Date(p.createdAt)
+              : undefined;
+          const updatedAt = p.updatedAt instanceof Date
+            ? p.updatedAt
+            : typeof p.updatedAt === "string" || typeof p.updatedAt === "number"
+              ? new Date(p.updatedAt)
+              : undefined;
+
+          return {
+            ...(p as unknown as Project),
+            createdAt,
+            updatedAt,
+          } as Project;
+        });
         
         return this.projects;
       } catch (err) {
@@ -660,25 +746,26 @@ class DataStore {
   /**
    * Creates a new user
    * @param {Omit<User, 'id' | 'submittedAt'>} data - User data
-   * @returns {User} Created user
+   * @returns {Promise<User>} Created user
    */
-  createUser(data: Omit<User, "id" | "submittedAt">): User {
+  async createUser(data: Omit<User, "id" | "submittedAt">): Promise<User> {
     const user: User = {
       id: `user-${Date.now()}`,
       ...data,
       submittedAt: new Date(),
     };
     this.users.push(user);
+    await this.syncUsersFile();
     return user;
   }
-
+ 
   /**
    * Updates an existing user
    * @param {string} id - User ID to update
    * @param {Partial<User>} data - Fields to update
-   * @returns {User | undefined} Updated user or undefined if not found
+   * @returns {Promise<User | undefined>} Updated user or undefined if not found
    */
-  updateUser(id: string, data: Partial<User>): User | undefined {
+  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
     const index = this.users.findIndex((u) => u.id === id);
     if (index === -1) return undefined;
 
@@ -686,29 +773,30 @@ class DataStore {
       ...this.users[index],
       ...data,
     };
+    await this.syncUsersFile();
     return this.users[index];
   }
 
   /**
    * Deletes a user
    * @param {string} id - User ID to delete
-   * @returns {User | undefined} Deleted user or undefined if not found
+   * @returns {Promise<User | undefined>} Deleted user or undefined if not found
    */
-  deleteUser(id: string): User | undefined {
+  async deleteUser(id: string): Promise<User | undefined> {
     const index = this.users.findIndex((u) => u.id === id);
-    if (index === -1) return undefined;
+   if (index === -1) return undefined;
 
-    const [deleted] = this.users.splice(index, 1);
-    return deleted;
+   const [deleted] = this.users.splice(index, 1);
+   await this.syncUsersFile();
+   return deleted;
   }
-
   // ========================================================================
   // PUBLIC ANALYTICS API
   // ========================================================================
 
   /**
    * Retrieves dashboard statistics
-   * @returns {Promise<{totalProjects: number, totalUsers: number, recentSubmissions: number}>} Stats object
+   * @returns {Promise<{totalProjects: number, totalUsers: number, recentSubmissions: number, newMessages: number}>} Stats object
    */
   async getStats() {
     await this.loadProjects();
@@ -721,10 +809,13 @@ class DataStore {
       return new Date(u.submittedAt) > thirtyDaysAgo;
     }).length;
 
+    const newMessages = this.users.filter((u) => !u.reply).length;
+
     return {
       totalProjects: this.projects.length,
       totalUsers: this.users.length,
       recentSubmissions,
+      newMessages,
     };
   }
 }

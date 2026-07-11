@@ -26,12 +26,16 @@ export async function POST(request: Request) {
       (a) => a.username === username && a.password === password
     );
 
-    // If admin found, return success
+    // If admin found, return success with the assigned role
     if (admin) {
       return Response.json(
         {
           message: "Login successful",
-          admin: { id: admin.id, username: admin.username },
+          admin: {
+            id: admin.id,
+            username: admin.username,
+            role: admin.role,
+          },
         },
         { status: 200 }
       );

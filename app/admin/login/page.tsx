@@ -64,15 +64,17 @@ export default function AdminLoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Store authentication flag and username in localStorage
+        // Store authentication flag, username, and role in localStorage
         localStorage.setItem("isAdmin", "true");
         localStorage.setItem("adminUsername", username);
+        localStorage.setItem("adminRole", data.admin.role);
         
         // Show success message
         toast.success("Login successful!");
         
-        // Redirect to admin dashboard
-        router.push("/admin");
+        // Redirect based on role
+        const destination = data.admin.role === "Superadmin" ? "/admin" : "/admin/projects";
+        router.push(destination);
       } else {
         // Show error message from API or generic message
         toast.error(data.message || "Invalid credentials");

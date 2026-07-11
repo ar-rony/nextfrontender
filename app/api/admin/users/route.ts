@@ -12,7 +12,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const newUser = dataStore.createUser(data);
+    const newUser = await dataStore.createUser(data);
     return Response.json(newUser, { status: 201 });
   } catch (error) {
     return Response.json({ message: "Failed to create user" }, { status: 400 });
