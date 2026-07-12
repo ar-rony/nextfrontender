@@ -703,7 +703,7 @@ class DataStore {
       ...data,
       submittedAt: new Date(),
     };
-
+// code dataStore.ts
     const databaseReady = await this.ensureProjectsTable();
     if (databaseReady) {
       await prisma.user.create({
