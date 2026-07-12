@@ -7,82 +7,16 @@
 // ============================================================================
 
 import { Project, User } from "@/app/lib/constants";
-import { createClient, createPool } from "@vercel/postgres";
+import { prisma } from "@/app/lib/prisma";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
-type Primitive = string | number | boolean | undefined | null;
-
-type DatabaseClient = {
-  sql: (strings: TemplateStringsArray, ...values: Primitive[]) => Promise<unknown>;
-};
 
 // ============================================================================
 // DATABASE CLIENT SETUP
 // ============================================================================
-/**
- * Initializes and returns the appropriate database client
- * Prefers non-pooling connection for direct queries when available
- * Falls back to pooled connection for Vercel Postgres
- * @returns {DatabaseClient | undefined} Client instance or undefined if no connection
- */
-function getDbClient(): DatabaseClient | undefined {
-  // Try non-pooling connection first (for direct queries)
-  const directConnection = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
-
-  // Fall back to pooled connection (for Vercel Postgres)
-  const pooledConnection = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-
-  // Use direct connection if available and not pooler
-  if (directConnection && !directConnection.includes("-pooler.")) {
-    try {
-      const client = createClient({ connectionString: directConnection });
-      return {
-        sql: async (strings: TemplateStringsArray, ...values: Primitive[]) => {
-          await client.connect();
-          try {
-            return await client.sql(strings, ...values);
-          } finally {
-            await client.end();
-          }
-        },
-      };
-    } catch (error) {
-      console.error("Failed to initialize direct Postgres client", error);
-      return undefined;
-    }
-  }
-
-  // Use pooled connection if available and is pooler
-  if (pooledConnection && pooledConnection.includes("-pooler.")) {
-    return createPool({ connectionString: pooledConnection });
-  }
-
-  // Fall back to direct connection as last resort
-  if (directConnection) {
-    try {
-      const client = createClient({ connectionString: directConnection });
-      return {
-        sql: async (strings: TemplateStringsArray, ...values: Primitive[]) => {
-          await client.connect();
-          try {
-            return await client.sql(strings, ...values);
-          } finally {
-            await client.end();
-          }
-        },
-      };
-    } catch (error) {
-      console.error("Failed to initialize fallback direct Postgres client", error);
-    }
-  }
-
-  return undefined;
-}
-
-// Initialize database client
-const db = getDbClient();
+// Prisma handles both local development and Vercel Postgres using DATABASE_URL.
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -183,6 +117,7 @@ class DataStore {
   // Flags for optimization
   private projectsLoaded = false; // Prevents redundant loading
   private databaseReady = false; // Caches database initialization status
+  private databaseAvailable = false;
 
   constructor() {
     // Initialize file paths
@@ -313,45 +248,20 @@ class DataStore {
    * @returns {Promise<boolean>} True if table is ready, false otherwise
    */
   private async ensureProjectsTable(): Promise<boolean> {
-    // Get connection string from environment
-    const connectionString = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
-    if (!connectionString) {
-      return false; // No database configured
-    }
-
-    if (!db) {
-      console.error("No database client available for Vercel Postgres");
-      return false;
-    }
-
-    // Return early if table is already initialized
     if (this.databaseReady) {
-      return true;
+      return this.databaseAvailable;
     }
 
     try {
-      // Create table with proper schema and indexes
-      await db.sql`
-        CREATE TABLE IF NOT EXISTS projects (
-          id TEXT PRIMARY KEY,
-          slug TEXT UNIQUE NOT NULL,
-          title TEXT NOT NULL,
-          category TEXT NOT NULL,
-          summary TEXT NOT NULL,
-          description TEXT NOT NULL,
-          stack JSONB NOT NULL DEFAULT '[]'::jsonb,
-          images JSONB,
-          preview TEXT,
-          link TEXT,
-          "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-          "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-        )
-      `;
-      
+      await prisma.$connect();
+      await prisma.$queryRaw`SELECT 1`;
+      this.databaseAvailable = true;
       this.databaseReady = true;
       return true;
     } catch (err) {
-      console.error("Failed to initialize Vercel Postgres for projects", err);
+      console.error("Prisma database connection not available", err);
+      this.databaseAvailable = false;
+      this.databaseReady = true;
       return false;
     }
   }
@@ -366,33 +276,47 @@ class DataStore {
     const isReady = await this.ensureProjectsTable();
     if (!isReady) return [];
 
-    if (!db) {
-      return [];
-    }
-
     try {
-      // Fetch all projects ordered by creation date (newest first)
-      const result = (await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`) as { rows?: ProjectRow[] };
-      const rows = result.rows ?? [];
-      const projects = rows.map(toProject);
+      const rows = await prisma.project.findMany({
+        orderBy: { createdAt: "desc" },
+      });
 
-      // If database is empty, try to seed it with file data
+      const projects = rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        category: row.category,
+        summary: row.summary,
+        description: row.description,
+        stack: Array.isArray(row.stack) ? row.stack.filter((item): item is string => typeof item === "string") : [],
+        images: Array.isArray(row.images) ? row.images.filter((item): item is string => typeof item === "string") : [],
+        preview: row.preview ?? undefined,
+        link: row.link ?? undefined,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      }));
+
       if (projects.length === 0) {
         const fallbackProjects = this.loadProjectsSync();
         if (fallbackProjects.length > 0) {
-          // Seed database with fallback projects
           for (const project of fallbackProjects) {
-            await db.sql`
-              INSERT INTO projects (id, slug, title, category, summary, description, stack, images, preview, link)
-              VALUES (${project.id}, ${project.slug}, ${project.title}, ${project.category}, ${project.summary}, ${project.description}, ${JSON.stringify(project.stack ?? [])}, ${JSON.stringify(project.images ?? [])}, ${project.preview ?? null}, ${project.link ?? null})
-              ON CONFLICT (id) DO NOTHING
-            `;
+            await prisma.project.create({
+              data: {
+                id: project.id,
+                slug: project.slug,
+                title: project.title,
+                category: project.category,
+                summary: project.summary,
+                description: project.description,
+                stack: project.stack ?? [],
+                images: project.images ?? [],
+                preview: project.preview,
+                link: project.link,
+              },
+            }).catch(() => undefined);
           }
 
-          // Reload projects after seeding
-          const seededResult = (await db.sql`SELECT * FROM projects ORDER BY "createdAt" DESC`) as { rows?: ProjectRow[] };
-          const seededRows = seededResult.rows ?? [];
-          const seededProjects = seededRows.map(toProject);
+          const seededProjects = await this.loadProjectsFromDatabase();
           this.projects = seededProjects;
           await this.syncProjectsFile(seededProjects);
           return seededProjects;
@@ -403,7 +327,7 @@ class DataStore {
       await this.syncProjectsFile(projects);
       return projects;
     } catch (err) {
-      console.error("Failed to load projects from Postgres", err);
+      console.error("Failed to load projects from Prisma", err);
       return [];
     }
   }
@@ -630,19 +554,26 @@ class DataStore {
       updatedAt: new Date(),
     };
 
-    // Try to persist to database
     const databaseReady = await this.ensureProjectsTable();
-    if (databaseReady && db) {
-      await db.sql`
-        INSERT INTO projects (id, slug, title, category, summary, description, stack, images, preview, link)
-        VALUES (${project.id}, ${project.slug}, ${project.title}, ${project.category}, ${project.summary}, ${project.description}, ${JSON.stringify(project.stack)}, ${JSON.stringify(project.images ?? [])}, ${project.preview ?? null}, ${project.link ?? null})
-      `;
-      
-      // Reload from database to ensure consistency
+    if (databaseReady) {
+      await prisma.project.create({
+        data: {
+          id: project.id,
+          slug: project.slug,
+          title: project.title,
+          category: project.category,
+          summary: project.summary,
+          description: project.description,
+          stack: project.stack ?? [],
+          images: project.images ?? [],
+          preview: project.preview,
+          link: project.link,
+        },
+      });
+
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
-      // Invalidate cache for next requests - CRITICAL for frontend updates
       this.invalidateProjectsCache();
       return project;
     }
@@ -676,29 +607,26 @@ class DataStore {
       updatedAt: new Date(),
     };
 
-    // Try to persist to database
     const databaseReady = await this.ensureProjectsTable();
-    if (databaseReady && db) {
-      await db.sql`
-        UPDATE projects
-        SET slug = ${updatedProject.slug},
-            title = ${updatedProject.title},
-            category = ${updatedProject.category},
-            summary = ${updatedProject.summary},
-            description = ${updatedProject.description},
-            stack = ${JSON.stringify(updatedProject.stack ?? [])},
-            images = ${JSON.stringify(updatedProject.images ?? [])},
-            preview = ${updatedProject.preview ?? null},
-            link = ${updatedProject.link ?? null},
-            "updatedAt" = NOW()
-        WHERE id = ${id}
-      `;
-      
-      // Reload from database
+    if (databaseReady) {
+      await prisma.project.update({
+        where: { id },
+        data: {
+          slug: updatedProject.slug,
+          title: updatedProject.title,
+          category: updatedProject.category,
+          summary: updatedProject.summary,
+          description: updatedProject.description,
+          stack: updatedProject.stack ?? [],
+          images: updatedProject.images ?? [],
+          preview: updatedProject.preview ?? null,
+          link: updatedProject.link ?? null,
+        },
+      });
+
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
-      // Invalidate cache for next requests - CRITICAL for frontend updates
       this.invalidateProjectsCache();
       return updatedProject;
     }
@@ -725,16 +653,13 @@ class DataStore {
 
     const [deleted] = this.projects.splice(index, 1);
 
-    // Try to persist deletion to database
     const databaseReady = await this.ensureProjectsTable();
-    if (databaseReady && db) {
-      await db.sql`DELETE FROM projects WHERE id = ${id}`;
-      
-      // Reload from database
+    if (databaseReady) {
+      await prisma.project.delete({ where: { id } });
+
       const freshProjects = await this.loadProjectsFromDatabase();
       this.projects = freshProjects;
       await this.syncProjectsFile(this.projects);
-      // Invalidate cache for next requests - CRITICAL for frontend updates
       this.invalidateProjectsCache();
       return deleted;
     }
@@ -778,6 +703,20 @@ class DataStore {
       ...data,
       submittedAt: new Date(),
     };
+
+    const databaseReady = await this.ensureProjectsTable();
+    if (databaseReady) {
+      await prisma.user.create({
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          message: user.message,
+          submittedAt: user.submittedAt,
+        },
+      });
+    }
+
     this.users.push(user);
     await this.syncUsersFile();
     return user;

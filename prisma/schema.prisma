@@ -23,9 +23,13 @@ model Project {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  name        String
-  email       String
-  message     String?
-  submittedAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  name         String
+  email        String
+  mobile       String?
+  requirements String?
+  message      String?
+  reply        String?
+  repliedAt    DateTime?
+  submittedAt  DateTime  @default(now())
 }
