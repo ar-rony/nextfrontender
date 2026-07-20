@@ -43,7 +43,7 @@ export function Header() {
             Next<span className="text-primary">Frontender</span>
           </Link>
 
-          <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+          <nav className="hidden ml-auto md:mr-2 items-center gap-6 text-sm font-medium md:flex">
             {navItems.map(({ label, href }) => (
               <Link
                 key={href}
