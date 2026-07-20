@@ -48,7 +48,7 @@ export default function ProjectsGalleryClient({ projects: initialProjects }: { p
         <p className="text-lg text-muted-foreground">I build polished interfaces and thoughtful systems for founders, teams, and modern brands.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <article key={i} className="rounded-3xl border border-border bg-card/70 p-6">
