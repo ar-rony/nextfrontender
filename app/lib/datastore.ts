@@ -116,8 +116,8 @@ class DataStore {
   
   // Flags for optimization
   private projectsLoaded = false; // Prevents redundant loading
-  private databaseReady = false; // Caches database initialization status
-  private databaseAvailable = false;
+  private databaseAvailable = false; // Tracks database availability
+  private readonly isProduction = process.env.NODE_ENV === "production";
 
   constructor() {
     // Initialize file paths
@@ -234,9 +234,11 @@ class DataStore {
       if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
       fs.writeFileSync(this.usersRuntimePath, JSON.stringify(this.users, null, 2), "utf-8");
 
-      const dir = path.dirname(this.usersFilePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(this.usersFilePath, JSON.stringify(this.users, null, 2), "utf-8");
+      if (!this.isProduction) {
+        const dir = path.dirname(this.usersFilePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(this.usersFilePath, JSON.stringify(this.users, null, 2), "utf-8");
+      }
     } catch (err) {
       console.error("Failed to sync users.json", err);
     }
@@ -248,20 +250,24 @@ class DataStore {
    * @returns {Promise<boolean>} True if table is ready, false otherwise
    */
   private async ensureProjectsTable(): Promise<boolean> {
-    if (this.databaseReady) {
-      return this.databaseAvailable;
+    if (this.databaseAvailable) {
+      return true;
+    }
+
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL not configured; falling back to file storage.");
+      this.databaseAvailable = false;
+      return false;
     }
 
     try {
       await prisma.$connect();
       await prisma.$queryRaw`SELECT 1`;
       this.databaseAvailable = true;
-      this.databaseReady = true;
       return true;
     } catch (err) {
       console.error("Prisma database connection not available", err);
       this.databaseAvailable = false;
-      this.databaseReady = true;
       return false;
     }
   }
@@ -383,20 +389,24 @@ class DataStore {
    * Uses caching to prevent redundant loads
    */
   private async loadProjects() {
-    // Skip if already loaded
     if (this.projectsLoaded) return;
 
     this.projectsLoaded = true;
-    
-    // Try database first
+
     const projectsFromDatabase = await this.loadProjectsFromDatabase();
-    if (projectsFromDatabase.length > 0 || this.databaseReady) {
+    if (projectsFromDatabase.length > 0) {
       this.projects = projectsFromDatabase;
       return;
     }
 
-    // Fall back to file-based loading
-    this.projects = await this.loadProjectsFromFile();
+    // If database is unavailable, fall back to file-based storage
+    if (!this.databaseAvailable) {
+      this.projects = await this.loadProjectsFromFile();
+      return;
+    }
+
+    // If DB is available but returned no rows, preserve the empty result
+    this.projects = projectsFromDatabase;
   }
 
   // ========================================================================
@@ -415,10 +425,12 @@ class DataStore {
       if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
       fs.writeFileSync(this.runtimePath, JSON.stringify(projects, null, 2), "utf-8");
 
-      // Write to persistent path (repo/data directory)
-      const dir = path.dirname(this.filePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(this.filePath, JSON.stringify(projects, null, 2), "utf-8");
+      if (!this.isProduction) {
+        // Write to persistent path (repo/data directory)
+        const dir = path.dirname(this.filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(this.filePath, JSON.stringify(projects, null, 2), "utf-8");
+      }
 
       // Attempt to commit to GitHub (if configured)
       await this.commitToGitHub(projects);
