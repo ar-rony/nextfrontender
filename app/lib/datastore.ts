@@ -116,21 +116,15 @@ class DataStore {
   
   // Flags for optimization
   private projectsLoaded = false; // Prevents redundant loading
+  private usersLoaded = false; // Prevents redundant user loading
   private databaseAvailable = false; // Tracks database availability
   private readonly isProduction = process.env.NODE_ENV === "production";
 
   constructor() {
-    // Initialize file paths
     this.filePath = path.join(process.cwd(), "data", "projects.json");
     this.runtimePath = path.join(os.tmpdir(), "nextfrontender-projects.json");
     this.usersFilePath = path.join(process.cwd(), "data", "users.json");
     this.usersRuntimePath = path.join(os.tmpdir(), "nextfrontender-users.json");
-    
-    // Load projects synchronously on initialization (file-based fallback)
-    this.projects = this.loadProjectsSync();
-
-    // Load users from persisted storage or seed default values
-    this.users = this.loadUsersSync();
   }
 
   // ========================================================================
@@ -183,7 +177,7 @@ class DataStore {
    * Attempts runtime path first, then fallback to persistent path
    * @returns {User[]} Array of users or seeded default values
    */
-  private loadUsersSync(): User[] {
+  private async loadUsersFromFile(): Promise<User[]> {
     const loadPath = fs.existsSync(this.usersRuntimePath) ? this.usersRuntimePath : this.usersFilePath;
 
     try {
@@ -223,6 +217,34 @@ class DataStore {
         submittedAt: new Date("2024-01-10"),
       },
     ];
+  }
+
+  private async loadUsers() {
+    if (this.usersLoaded) return;
+
+    this.usersLoaded = true;
+
+    if (await this.ensureProjectsTable()) {
+      try {
+        const users = await prisma.user.findMany({ orderBy: { submittedAt: "desc" } });
+        this.users = users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobile: user.mobile ?? undefined,
+          requirements: user.requirements ?? undefined,
+          message: user.message ?? undefined,
+          reply: user.reply ?? undefined,
+          repliedAt: user.repliedAt ?? undefined,
+          submittedAt: user.submittedAt,
+        }));
+        return;
+      } catch (err) {
+        console.error("Failed to load users from Prisma", err);
+      }
+    }
+
+    this.users = await this.loadUsersFromFile();
   }
 
   /**
@@ -330,7 +352,6 @@ class DataStore {
       }
 
       this.projects = projects;
-      await this.syncProjectsFile(projects);
       return projects;
     } catch (err) {
       console.error("Failed to load projects from Prisma", err);
@@ -399,13 +420,11 @@ class DataStore {
       return;
     }
 
-    // If database is unavailable, fall back to file-based storage
     if (!this.databaseAvailable) {
       this.projects = await this.loadProjectsFromFile();
       return;
     }
 
-    // If DB is available but returned no rows, preserve the empty result
     this.projects = projectsFromDatabase;
   }
 
@@ -691,7 +710,8 @@ class DataStore {
    * Retrieves all users
    * @returns {User[]} All users
    */
-  getUsers(): User[] {
+  async getUsers(): Promise<User[]> {
+    await this.loadUsers();
     return this.users;
   }
 
@@ -700,7 +720,8 @@ class DataStore {
    * @param {string} id - User ID
    * @returns {User | undefined} User or undefined if not found
    */
-  getUserById(id: string): User | undefined {
+  async getUserById(id: string): Promise<User | undefined> {
+    await this.loadUsers();
     return this.users.find((u) => u.id === id);
   }
 
@@ -710,26 +731,35 @@ class DataStore {
    * @returns {Promise<User>} Created user
    */
   async createUser(data: Omit<User, "id" | "submittedAt">): Promise<User> {
+    await this.loadUsers();
+
     const user: User = {
       id: `user-${Date.now()}`,
       ...data,
       submittedAt: new Date(),
     };
-// code dataStore.ts
-    const databaseReady = await this.ensureProjectsTable();
-    if (databaseReady) {
-      await prisma.user.create({
-        data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          message: user.message,
-          submittedAt: user.submittedAt,
-        },
-      });
+
+    if (await this.ensureProjectsTable()) {
+      try {
+        await prisma.user.create({
+          data: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            mobile: user.mobile,
+            requirements: user.requirements,
+            message: user.message,
+            reply: user.reply,
+            repliedAt: user.repliedAt,
+            submittedAt: user.submittedAt,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to create user in Prisma", err);
+      }
     }
 
-    this.users.push(user);
+    this.users.unshift(user);
     await this.syncUsersFile();
     return user;
   }
@@ -741,6 +771,8 @@ class DataStore {
    * @returns {Promise<User | undefined>} Updated user or undefined if not found
    */
   async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+    await this.loadUsers();
+
     const index = this.users.findIndex((u) => u.id === id);
     if (index === -1) return undefined;
 
@@ -758,12 +790,14 @@ class DataStore {
    * @returns {Promise<User | undefined>} Deleted user or undefined if not found
    */
   async deleteUser(id: string): Promise<User | undefined> {
-    const index = this.users.findIndex((u) => u.id === id);
-   if (index === -1) return undefined;
+    await this.loadUsers();
 
-   const [deleted] = this.users.splice(index, 1);
-   await this.syncUsersFile();
-   return deleted;
+    const index = this.users.findIndex((u) => u.id === id);
+    if (index === -1) return undefined;
+
+    const [deleted] = this.users.splice(index, 1);
+    await this.syncUsersFile();
+    return deleted;
   }
   // ========================================================================
   // PUBLIC ANALYTICS API
@@ -775,8 +809,8 @@ class DataStore {
    */
   async getStats() {
     await this.loadProjects();
+    await this.loadUsers();
     
-    // Count submissions from the last 30 days
     const recentSubmissions = this.users.filter((u) => {
       if (!u.submittedAt) return false;
       const thirtyDaysAgo = new Date();

@@ -7,7 +7,7 @@ type RouteContext = {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const user = dataStore.getUserById(id);
+    const user = await dataStore.getUserById(id);
 
     if (!user) {
       return Response.json({ message: "User not found" }, { status: 404 });

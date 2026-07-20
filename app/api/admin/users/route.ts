@@ -2,7 +2,7 @@ import { dataStore } from "@/app/lib/datastore";
 
 export async function GET() {
   try {
-    const users = dataStore.getUsers();
+    const users = await dataStore.getUsers();
     return Response.json(users);
   } catch (error) {
     return Response.json({ message: "Server error" }, { status: 500 });
