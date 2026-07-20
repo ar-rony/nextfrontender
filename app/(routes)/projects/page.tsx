@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import type { Project } from "@/app/lib/constants";
-import { dataStore } from "@/app/lib/datastore";
 import ProjectsGalleryClient from "./ProjectsGalleryClient";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +8,7 @@ export const metadata: Metadata = {
   description: "Selected work and recent projects.",
 };
 
-export default async function ProjectsPage() {
-  const projects = await dataStore.getProjects();
-
-  return <ProjectsGalleryClient projects={projects} />;
+// Render shell immediately; ProjectsGalleryClient will fetch data on the client.
+export default function ProjectsPage() {
+  return <ProjectsGalleryClient />;
 }

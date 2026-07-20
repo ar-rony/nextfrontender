@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Project } from "@/app/lib/constants";
 
 type LightboxState = {
@@ -18,9 +18,44 @@ function getProjectImages(project: Project) {
   return Array.from(new Set(images));
 }
 
-export default function ProjectsGalleryClient({ projects }: { projects: Project[] }) {
+export default function ProjectsGalleryClient({ projects: initialProjects }: { projects?: Project[] }) {
   const [lightbox, setLightbox] = useState<LightboxState>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [projects, setProjects] = useState<Project[]>(initialProjects ?? []);
+  const [loading, setLoading] = useState<boolean>(!initialProjects);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialProjects) return; // already have data
+
+    let mounted = true;
+    const controller = new AbortController();
+
+    async function fetchProjects() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/admin/projects', { signal: controller.signal });
+        if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+        const data = await res.json();
+        // API returns array of projects
+        if (mounted) setProjects(data ?? []);
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Projects fetch error', err);
+        if (mounted) setError(err.message || 'Failed to load projects');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    fetchProjects();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [initialProjects]);
 
   const openLightbox = (project: Project, index = 0) => {
     const images = getProjectImages(project);
@@ -65,7 +100,36 @@ export default function ProjectsGalleryClient({ projects }: { projects: Project[
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {projects.map((project) => {
+          {loading ? (
+            // detailed skeleton cards while loading
+            Array.from({ length: 4 }).map((_, i) => (
+              <article key={i} className="rounded-3xl border border-border bg-card/70 p-6">
+                <div className="relative mb-4">
+                  <div className="block aspect-[16/9] w-full overflow-hidden bg-muted animate-pulse" aria-hidden />
+                  <div className="pointer-events-none absolute left-4 bottom-4 rounded-full bg-black/20 px-3 py-1 text-xs text-white opacity-70" />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="h-6 w-3/4 rounded bg-muted/60 animate-pulse" aria-hidden />
+                  <div className="h-4 w-full max-w-2xl rounded bg-muted/50 animate-pulse" aria-hidden />
+                  <div className="h-4 w-5/6 rounded bg-muted/50 animate-pulse" aria-hidden />
+
+                  <div className="mt-4 flex gap-2">
+                    <div className="h-6 w-16 rounded-full bg-muted/50 animate-pulse" aria-hidden />
+                    <div className="h-6 w-12 rounded-full bg-muted/50 animate-pulse" aria-hidden />
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="h-8 w-28 rounded bg-muted/60 animate-pulse" aria-hidden />
+                    <div className="h-6 w-20 rounded bg-muted/60 animate-pulse" aria-hidden />
+                  </div>
+                </div>
+              </article>
+            ))
+          ) : error ? (
+            <div className="col-span-2 p-6 text-center text-sm text-destructive">{error}</div>
+          ) : (
+            projects.map((project) => {
             const images = getProjectImages(project);
 
             return (
@@ -133,7 +197,8 @@ export default function ProjectsGalleryClient({ projects }: { projects: Project[
                 </div>
               </article>
             );
-          })}
+            })
+          )}
         </div>
       </section>
 
