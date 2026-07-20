@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const projects = await dataStore.getProjects();
-  const project = projects.find((entry) => entry.slug === slug);
+  const project = await dataStore.getProjectBySlug(slug);
 
   if (!project) {
     return { title: "Project Not Found" };
@@ -27,8 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProjectDetailPage({ params }: Props) {
   const { slug } = await params;
-  const projects = await dataStore.getProjects();
-  const project = projects.find((entry) => entry.slug === slug);
+  const project = await dataStore.getProjectBySlug(slug);
 
   if (!project) {
     notFound();

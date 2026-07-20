@@ -305,7 +305,21 @@ class DataStore {
     if (!isReady) return [];
 
     try {
+      // Fetch minimal fields for listing to reduce payload and JSON parsing cost
       const rows = await prisma.project.findMany({
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          category: true,
+          summary: true,
+          stack: true,
+          images: true,
+          preview: true,
+          link: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         orderBy: { createdAt: "desc" },
       });
 
@@ -315,7 +329,8 @@ class DataStore {
         title: row.title,
         category: row.category,
         summary: row.summary,
-        description: row.description,
+        // description intentionally omitted for listing (reduces data transfer)
+        description: undefined,
         stack: Array.isArray(row.stack) ? row.stack.filter((item): item is string => typeof item === "string") : [],
         images: Array.isArray(row.images) ? row.images.filter((item): item is string => typeof item === "string") : [],
         preview: row.preview ?? undefined,
@@ -546,6 +561,42 @@ class DataStore {
   async getProjectById(id: string): Promise<Project | undefined> {
     await this.loadProjects();
     return this.projects.find((p) => p.id === id);
+  }
+
+  /**
+   * Retrieves a single project by slug directly from the database when possible
+   * Falls back to in-memory list if DB not available
+   */
+  async getProjectBySlug(slug: string): Promise<Project | undefined> {
+    // Try direct DB lookup for a single project (avoids loading full list)
+    if (await this.ensureProjectsTable()) {
+      try {
+        const row = await prisma.project.findUnique({ where: { slug } });
+        if (row) {
+          // Map full row to Project (include description)
+          return toProject({
+            id: row.id,
+            slug: row.slug,
+            title: row.title,
+            category: row.category,
+            summary: row.summary,
+            description: row.description,
+            stack: row.stack,
+            images: row.images,
+            preview: row.preview,
+            link: row.link,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch project by slug from Prisma", err);
+      }
+    }
+
+    // Fallback: load cached projects and find locally
+    await this.loadProjects();
+    return this.projects.find((p) => p.slug === slug);
   }
 
   /**
